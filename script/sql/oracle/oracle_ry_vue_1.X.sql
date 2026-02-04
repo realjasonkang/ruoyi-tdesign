@@ -895,9 +895,6 @@ insert into sys_dict_type values(14, '000000', '消息模板类型', 'sys_messag
 insert into sys_dict_type values(15, '000000', '授权类型', 'sys_grant_type',     103, 1, sysdate, null, null, '认证授权类型');
 insert into sys_dict_type values(16, '000000', '设备类型', 'sys_device_type',    103, 1, sysdate, null, null, '客户端设备类型');
 insert into sys_dict_type values(17, '000000', '敏感词类别', 'sensitive_words_category', 103, 1, sysdate, 1, sysdate, null);
-INSERT INTO sys_dict_type VALUES (18, '000000', '业务状态', 'wf_business_status', 103, 1, sysdate, NULL, NULL, '业务状态列表');
-INSERT INTO sys_dict_type VALUES (19, '000000', '表单类型', 'wf_form_type', 103, 1, sysdate, NULL, NULL, '表单类型列表');
-INSERT INTO sys_dict_type VALUES (20, '000000', '任务状态', 'wf_task_status', 103, 1, sysdate, NULL, NULL, '任务状态');
 INSERT INTO sys_dict_type VALUES (21, '000000', '存储配置请求模式', 'sys_storage_request_mode', 103, 1, sysdate, 1, sysdate, '存储配置');
 
 
@@ -984,27 +981,6 @@ insert into sys_dict_data values(55, '000000', 0,  '安卓', 'android',     'sys
 insert into sys_dict_data values(56, '000000', 0,  'iOS', 'ios',          'sys_device_type',     '',   'primary', '', 'N', 103, 1, sysdate, null, null, 'iOS');
 insert into sys_dict_data values(57, '000000', 0,  '小程序', 'xcx',       'sys_device_type',     '',   'primary', '', 'N', 103, 1, sysdate, null, null, '小程序');
 insert into sys_dict_data values(70, '000000', 99, '其他', 'other', 'sensitive_words_category', null, 'primary', null, 'N', 103, 1, sysdate, 1, sysdate, null);
-INSERT INTO sys_dict_data VALUES (71, '000000', 1, '已撤销', 'cancel', 'wf_business_status', '', 'danger', '', 'N', 103, 1, sysdate, NULL, NULL, '已撤销');
-INSERT INTO sys_dict_data VALUES (72, '000000', 2, '草稿', 'draft', 'wf_business_status', '', 'default', '', 'N', 103, 1, sysdate, NULL, NULL, '草稿');
-INSERT INTO sys_dict_data VALUES (73, '000000', 3, '待审核', 'waiting', 'wf_business_status', '', 'primary', '', 'N', 103, 1, sysdate, NULL, NULL, '待审核');
-INSERT INTO sys_dict_data VALUES (74, '000000', 4, '已完成', 'finish', 'wf_business_status', '', 'success', '', 'N', 103, 1, sysdate, NULL, NULL, '已完成');
-INSERT INTO sys_dict_data VALUES (75, '000000', 5, '已作废', 'invalid', 'wf_business_status', '', 'danger', '', 'N', 103, 1, sysdate, NULL, NULL, '已作废');
-INSERT INTO sys_dict_data VALUES (76, '000000', 6, '已退回', 'back', 'wf_business_status', '', 'danger', '', 'N', 103, 1, sysdate, NULL, NULL, '已退回');
-INSERT INTO sys_dict_data VALUES (77, '000000', 7, '已终止', 'termination', 'wf_business_status', '', 'danger', '', 'N', 103, 1, sysdate, NULL, NULL, '已终止');
-INSERT INTO sys_dict_data VALUES (78, '000000', 1, '自定义表单', 'static', 'wf_form_type', '', 'success', '', 'N', 103, 1, sysdate, NULL, NULL, '自定义表单');
-INSERT INTO sys_dict_data VALUES (79, '000000', 2, '动态表单', 'dynamic', 'wf_form_type', '', 'primary', '', 'N', 103, 1, sysdate, NULL, NULL, '动态表单');
-INSERT INTO sys_dict_data VALUES (80, '000000', 1, '撤销', 'cancel', 'wf_task_status', '', 'danger', '', 'N', 103, 1, sysdate, NULL, NULL, '撤销');
-INSERT INTO sys_dict_data VALUES (81, '000000', 2, '通过', 'pass', 'wf_task_status', '', 'success', '', 'N', 103, 1, sysdate, NULL, NULL, '通过');
-INSERT INTO sys_dict_data VALUES (82, '000000', 3, '待审核', 'waiting', 'wf_task_status', '', 'primary', '', 'N', 103, 1, sysdate, NULL, NULL, '待审核');
-INSERT INTO sys_dict_data VALUES (83, '000000', 4, '作废', 'invalid', 'wf_task_status', '', 'danger', '', 'N', 103, 1, sysdate, NULL, NULL, '作废');
-INSERT INTO sys_dict_data VALUES (84, '000000', 5, '退回', 'back', 'wf_task_status', '', 'danger', '', 'N', 103, 1, sysdate, NULL, NULL, '退回');
-INSERT INTO sys_dict_data VALUES (85, '000000', 6, '终止', 'termination', 'wf_task_status', '', 'danger', '', 'N', 103, 1, sysdate, NULL, NULL, '终止');
-INSERT INTO sys_dict_data VALUES (86, '000000', 7, '转办', 'transfer', 'wf_task_status', '', 'primary', '', 'N', 103, 1, sysdate, NULL, NULL, '转办');
-INSERT INTO sys_dict_data VALUES (87, '000000', 8, '委托', 'depute', 'wf_task_status', '', 'primary', '', 'N', 103, 1, sysdate, NULL, NULL, '委托');
-INSERT INTO sys_dict_data VALUES (88, '000000', 9, '抄送', 'copy', 'wf_task_status', '', 'primary', '', 'N', 103, 1, sysdate, NULL, NULL, '抄送');
-INSERT INTO sys_dict_data VALUES (89, '000000', 10, '加签', 'sign', 'wf_task_status', '', 'primary', '', 'N', 103, 1, sysdate, NULL, NULL, '加签');
-INSERT INTO sys_dict_data VALUES (90, '000000', 11, '减签', 'sign_off', 'wf_task_status', '', 'danger', '', 'N', 103, 1, sysdate, NULL, NULL, '减签');
-INSERT INTO sys_dict_data VALUES (91, '000000', 11, '超时', 'timeout', 'wf_task_status', '', 'danger', '', 'N', 103, 1, sysdate, NULL, NULL, '超时');
 INSERT INTO sys_dict_data VALUES (100, '000000', 0, '代理转发请求', 'proxy', 'sys_storage_request_mode', NULL, 'primary', NULL, 'N', 103, 1, sysdate, 1, sysdate, NULL);
 INSERT INTO sys_dict_data VALUES (101, '000000', 1, '源地址重定向请求', 'direct', 'sys_storage_request_mode', NULL, 'primary', NULL, 'N', 103, 1, sysdate, 1, sysdate, NULL);
 INSERT INTO sys_dict_data VALUES (102, '000000', 2, '预签名重定向请求', 'direct_signature', 'sys_storage_request_mode', NULL, 'primary', NULL, 'N', 103, 1, sysdate, 1, sysdate, NULL);
@@ -1269,8 +1245,8 @@ create table sys_oss (
 );
 
 alter table sys_oss add constraint pk_sys_oss primary key (oss_id);
-create index idx_oss_category_id on sys_oss (oss_category_id);
-create index idx_user on sys_oss (create_by, user_type, create_time);
+create index idx_sys_oss_category_id on sys_oss (oss_category_id);
+create index idx_sys_oss_user on sys_oss (create_by, user_type, create_time);
 comment on table sys_oss                    is 'OSS对象存储表';
 comment on column sys_oss.oss_id            is '对象存储主键';
 comment on column sys_oss.tenant_id         is '租户编码';
@@ -1307,7 +1283,7 @@ create table sys_oss_category (
   create_time       date            not null,
   primary key (oss_category_id)
 );
-create index idx_user on sys_oss_category (create_by, user_type, order_num);
+create index idx_sys_oss_category_user on sys_oss_category (create_by, user_type, order_num);
 comment on column sys_oss_category.oss_category_id  is 'oss分类id';
 comment on column sys_oss_category.category_name    is '分类名称';
 comment on column sys_oss_category.parent_id        is '父级分类id';
@@ -1579,7 +1555,7 @@ create table sys_message_log (
 );
 
 alter table sys_message_log add constraint pk_sys_message_log primary key (message_log_id);
-create index idx_sys_message_template_id on sys_message_log (message_template_id);
+create index idx_sys_message_log_template_id on sys_message_log (message_template_id);
 comment on table sys_message_log                        is '消息发送记录表';
 comment on column sys_message_log.message_log_id        is '消息发送记录id';
 comment on column sys_message_log.message_template_id   is '消息模板id';
