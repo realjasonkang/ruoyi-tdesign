@@ -261,8 +261,8 @@ CREATE TABLE flow_user
     tenant_id    varchar(40) NULL,                                 -- 租户id
     CONSTRAINT flow_user_pk PRIMARY KEY (id)
 );
-CREATE INDEX user_processed_type ON flow_user USING btree (processed_by, type);
-CREATE INDEX user_associated_idx ON FLOW_USER USING btree (associated);
+CREATE INDEX IF NOT EXISTS idx_flow_user_processed_type ON flow_user USING btree (processed_by, type);
+CREATE INDEX IF NOT EXISTS idx_flow_user_associated ON flow_user USING btree (associated);
 
 COMMENT ON TABLE flow_user IS '流程用户表';
 
@@ -405,4 +405,5 @@ INSERT INTO sys_dict_data VALUES (88, '000000', 9, '抄送', 'copy', 'wf_task_st
 INSERT INTO sys_dict_data VALUES (89, '000000', 10, '加签', 'sign', 'wf_task_status', '', 'primary', '', 'N', 103, 1, now(), NULL, NULL, '加签');
 INSERT INTO sys_dict_data VALUES (90, '000000', 11, '减签', 'sign_off', 'wf_task_status', '', 'danger', '', 'N', 103, 1, now(), NULL, NULL, '减签');
 INSERT INTO sys_dict_data VALUES (91, '000000', 11, '超时', 'timeout', 'wf_task_status', '', 'danger', '', 'N', 103, 1, now(), NULL, NULL, '超时');
+
 
