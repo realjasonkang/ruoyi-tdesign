@@ -77,19 +77,6 @@
       </t-form-item>
     </template>
 
-    <template v-if="type === 'password' && captchaEnabled">
-      <t-form-item class="verification-code" name="code">
-        <t-input v-model="formData.code" size="large" placeholder="请输入验证码">
-          <template #label>
-            <secured-icon />
-          </template>
-        </t-input>
-        <div class="login-code">
-          <img :src="codeUrl" class="login-code-img" @click="getCode" />
-        </div>
-      </t-form-item>
-    </template>
-
     <t-form-item class="check-container" name="checked">
       <t-checkbox v-model="formData.checked">{{ t('pages.login.register.agreeTerms') }} </t-checkbox>
       <span>{{ t('pages.login.register.serviceTerms') }}</span>
@@ -109,9 +96,20 @@
       </span>
     </div>
   </t-form>
+
+  <!-- 行为验证码：点击注册后弹窗验证，通过后凭一次性票据继续注册 -->
+  <captcha
+    display="modal"
+    :visible="captchaVisible"
+    :base-url="captchaBaseUrl"
+    @success="onCaptchaSuccess"
+    @close="onCaptchaClose"
+  />
 </template>
 <script lang="ts" setup>
-import { BrowseIcon, BrowseOffIcon, LockOnIcon, MailIcon, SecuredIcon, UserIcon } from 'tdesign-icons-vue-next';
+import '@/components/CaptchaToolkit/style.css';
+
+import { BrowseIcon, BrowseOffIcon, LockOnIcon, MailIcon, UserIcon } from 'tdesign-icons-vue-next';
 import type { FormRule, SubmitContext } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, getCurrentInstance, ref } from 'vue';
@@ -119,6 +117,8 @@ import { computed, getCurrentInstance, ref } from 'vue';
 import { getCodeImg, getTenantList, register } from '@/api/login';
 import type { RegisterBody, TenantListVo } from '@/api/model/loginModel';
 import Company from '@/assets/icons/svg/company.svg?component';
+import type { VerifyResult } from '@/components/CaptchaToolkit/api';
+import Captcha from '@/components/CaptchaToolkit/Captcha.vue';
 import { useCounter } from '@/hooks';
 import { t } from '@/locales';
 
@@ -145,7 +145,6 @@ const FORM_RULES = computed<Record<string, FormRule[]>>(() => ({
 
 const loading = ref(false);
 const type = ref('phone');
-const codeUrl = ref('');
 const form = ref();
 const formData = ref({
   tenantId: '',
@@ -154,8 +153,9 @@ const formData = ref({
   account: '',
   password: '',
   confirmPassword: '',
+  // 手机号/邮箱注册的验证码
   code: '',
-  uuid: '',
+  ticket: '',
   userType: 'sys_user',
   checked: false,
 });
@@ -165,49 +165,66 @@ const tenantList = ref<TenantListVo[]>([]);
 const tenantEnabled = ref(true);
 // 验证码开关
 const captchaEnabled = ref(true);
+// 行为验证码弹窗开关（点击注册后弹出，验证通过再提交注册）
+const captchaVisible = ref(false);
+// 行为验证码接口前缀（跟随项目 api 前缀，开发环境由代理转发）
+const captchaBaseUrl = `${import.meta.env.VITE_APP_BASE_API}/api/captcha`;
 const showPsw = ref(false);
 
 const [countDown, handleCounter] = useCounter();
 
 const { proxy } = getCurrentInstance();
 
-const onSubmit = (ctx: SubmitContext) => {
-  if (ctx.validateResult === true) {
-    if (type.value === 'phone' || type.value === 'email') {
-      MessagePlugin.warning('暂不支持手机号与邮箱注册');
-      return;
-    }
-    if (!formData.value.checked) {
-      MessagePlugin.error(t('pages.login.register.validation.agreeTerms'));
-      return;
-    }
-
-    loading.value = true;
-    const registerForm: RegisterBody = {
-      username: formData.value.account,
-      code: formData.value.code,
-      password: formData.value.password,
-      userType: 'sys_user',
-      uuid: formData.value.uuid,
-    };
-    register(registerForm)
-      .then(() => {
-        MessagePlugin.success(t('pages.login.register.messages.registerSuccess'));
-        emit('register-success');
-        const username = registerForm.username;
-        proxy.$modal.alert({
-          header: `系统提示`,
-          body: `恭喜你，您的账号 ${username} 注册成功！`,
-          theme: 'success',
-        });
-      })
-      .catch(() => {
-        loading.value = false;
-        if (captchaEnabled.value) {
-          getCode();
-        }
+/**
+ * 提交注册
+ */
+function doRegister() {
+  loading.value = true;
+  const registerForm: RegisterBody = {
+    username: formData.value.account,
+    password: formData.value.password,
+    userType: 'sys_user',
+    ticket: formData.value.ticket,
+  };
+  register(registerForm)
+    .then(() => {
+      MessagePlugin.success(t('pages.login.register.messages.registerSuccess'));
+      emit('register-success');
+      const username = registerForm.username;
+      proxy.$modal.alert({
+        header: `系统提示`,
+        body: `恭喜你，您的账号 ${username} 注册成功！`,
+        theme: 'success',
       });
+    })
+    .catch(() => {
+      loading.value = false;
+      // 票据一次性使用，注册失败后需要重新验证
+      formData.value.ticket = '';
+    });
+}
+
+const onSubmit = async (ctx: SubmitContext) => {
+  if (ctx.validateResult !== true) {
+    return;
   }
+  if (type.value === 'phone' || type.value === 'email') {
+    MessagePlugin.warning('暂不支持手机号与邮箱注册');
+    return;
+  }
+  if (!formData.value.checked) {
+    MessagePlugin.error(t('pages.login.register.validation.agreeTerms'));
+    return;
+  }
+  // 账号信息先本地校验，再弹窗完成验证码，验证通过后才提交注册
+  if (!formData.value.ticket) {
+    // 先取本次的开关与类型，再按该类型渲染验证码弹窗
+    if (await prepareCaptcha()) {
+      captchaVisible.value = true;
+      return;
+    }
+  }
+  doRegister();
 };
 
 const switchType = (val: string) => {
@@ -215,14 +232,39 @@ const switchType = (val: string) => {
   type.value = val;
 };
 
-function getCode() {
-  getCodeImg().then((res) => {
+/**
+ * 拉取本次验证码开关与类型（后端 captcha.mode 可配成 random，每次随机一种类型）
+ *
+ * @return 本次注册是否需要验证码
+ */
+async function prepareCaptcha(): Promise<boolean> {
+  try {
+    const res = await getCodeImg();
     captchaEnabled.value = res.data.captchaEnabled === undefined ? true : res.data.captchaEnabled;
-    if (captchaEnabled.value) {
-      codeUrl.value = `data:image/gif;base64,${res.data.img}`;
-      formData.value.uuid = res.data.uuid;
-    }
-  });
+  } catch {
+    // 拉取失败时沿用上一次的开关与类型，避免网络抖动直接跳过验证
+  }
+  // 票据是一次性的，每次验证前清空
+  formData.value.ticket = '';
+  return captchaEnabled.value;
+}
+
+/**
+ * 行为验证码弹窗验证通过：保存一次性票据并继续注册
+ */
+function onCaptchaSuccess(result: VerifyResult) {
+  formData.value.ticket = result?.ticket || '';
+  captchaVisible.value = false;
+  if (formData.value.ticket) {
+    doRegister();
+  }
+}
+
+/**
+ * 行为验证码弹窗关闭（用户未验证或主动取消）
+ */
+function onCaptchaClose() {
+  captchaVisible.value = false;
 }
 
 /**
@@ -241,7 +283,6 @@ function initTenantList() {
   });
 }
 
-getCode();
 initTenantList();
 </script>
 <style lang="less" scoped>

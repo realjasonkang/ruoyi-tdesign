@@ -7,19 +7,17 @@ export interface UserInfo {
   permissions: Array<string>;
 }
 
-// 图片验证码
-export interface CaptchaImage {
+// 验证码开关（验证码图片、类型与答案都由行为验证码组件负责）
+export interface CaptchaConfig {
   captchaEnabled: boolean;
-  uuid: string;
-  img: string;
 }
 
 // 登录参数
 export interface LoginParam {
   username: string;
   password: string;
-  code: string;
-  uuid: string;
+  /** 行为验证码票据（验证通过后一次性使用） */
+  ticket?: string;
 }
 
 /**
@@ -33,8 +31,8 @@ export interface LoginData {
   socialCode?: string;
   socialState?: string;
   source?: string;
-  code?: string;
-  uuid?: string;
+  /** 行为验证码票据 */
+  ticket?: string;
   clientId?: string;
   grantType?: string;
 }
@@ -73,14 +71,9 @@ export interface LoginBody {
   password: string;
 
   /**
-   * 验证码
+   * 行为验证码票据（验证通过后一次性使用）
    */
-  code: string;
-
-  /**
-   * 唯一标识
-   */
-  uuid: string;
+  ticket?: string;
 }
 
 /**

@@ -53,6 +53,8 @@
         <!-- 工作流配置 -->
         <warm-flow.version>1.8.4</warm-flow.version>
         <x-file-storage.version>2.3.0</x-file-storage.version>
+        <!-- 行为验证码 -->
+        <captcha-toolkit.version>0.3.0</captcha-toolkit.version>
 
         <!-- 插件版本 -->
         <maven-jar-plugin.version>3.4.2</maven-jar-plugin.version>
@@ -377,6 +379,13 @@
                 <version>${anyline.version}</version>
             </dependency>
 
+            <!-- 行为验证码（滑块拼图 / 文字点选等） -->
+            <dependency>
+                <groupId>io.github.yixiaco</groupId>
+                <artifactId>captcha-spring-boot3-starter</artifactId>
+                <version>${captcha-toolkit.version}</version>
+            </dependency>
+
             <!-- 定时任务 -->
             <dependency>
                 <groupId>org.dromara</groupId>
@@ -631,5 +640,4 @@
     </pluginRepositories>
 
 </project>
-
 

@@ -115,6 +115,12 @@
             <artifactId>ruoyi-common-websocket</artifactId>
         </dependency>
 
+        <!-- 行为验证码：登录/注册验证码接口与一次性票据校验 -->
+        <dependency>
+            <groupId>io.github.yixiaco</groupId>
+            <artifactId>captcha-spring-boot3-starter</artifactId>
+        </dependency>
+
         <!-- skywalking 整合 logback -->
 <!--        <dependency>-->
 <!--            <groupId>org.apache.skywalking</groupId>-->

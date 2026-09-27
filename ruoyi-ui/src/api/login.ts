@@ -1,4 +1,4 @@
-import type { CaptchaImage, LoginData, LoginTenantVo, LoginVo, RegisterBody, UserInfo } from '@/api/model/loginModel';
+import type { CaptchaConfig, LoginData, LoginTenantVo, LoginVo, RegisterBody, UserInfo } from '@/api/model/loginModel';
 import type { R } from '@/api/model/resultModel';
 import { request } from '@/utils/request';
 
@@ -83,7 +83,7 @@ export function logout() {
 
 // 获取验证码
 export function getCodeImg() {
-  return request.get<R<CaptchaImage>>(
+  return request.get<R<CaptchaConfig>>(
     {
       url: '/auth/code',
       timeout: 20000,

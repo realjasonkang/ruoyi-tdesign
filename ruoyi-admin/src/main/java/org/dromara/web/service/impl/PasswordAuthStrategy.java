@@ -6,29 +6,22 @@ import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.dromara.common.core.constant.Constants;
-import org.dromara.common.core.constant.GlobalConstants;
 import org.dromara.common.core.constant.GrantTypeConstants;
 import org.dromara.common.core.constant.SystemConstants;
 import org.dromara.common.core.constant.TenantConstants;
 import org.dromara.common.core.domain.model.LoginUser;
 import org.dromara.common.core.domain.model.PasswordLoginBody;
 import org.dromara.common.core.enums.LoginType;
-import org.dromara.common.core.exception.user.CaptchaException;
-import org.dromara.common.core.exception.user.CaptchaExpireException;
 import org.dromara.common.core.exception.user.UserException;
-import org.dromara.common.core.utils.MessageUtils;
-import org.dromara.common.core.utils.StringUtils;
-import org.dromara.common.redis.utils.RedisUtils;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.common.satoken.utils.MultipleStpUtil;
 import org.dromara.common.tenant.annotation.IgnoreTenant;
-import org.dromara.common.web.config.properties.CaptchaProperties;
 import org.dromara.system.domain.SysUser;
 import org.dromara.system.domain.vo.SysClientVo;
 import org.dromara.system.domain.vo.SysUserVo;
 import org.dromara.system.mapper.SysUserMapper;
 import org.dromara.web.domain.vo.LoginVo;
+import org.dromara.web.service.CaptchaVerifier;
 import org.dromara.web.service.IAuthStrategy;
 import org.dromara.web.service.SysLoginService;
 import org.springframework.stereotype.Service;
@@ -43,7 +36,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class PasswordAuthStrategy implements IAuthStrategy<PasswordLoginBody> {
 
-    private final CaptchaProperties captchaProperties;
+    private final CaptchaVerifier captchaVerifier;
     private final SysLoginService loginService;
     private final SysUserMapper userMapper;
 
@@ -52,15 +45,11 @@ public class PasswordAuthStrategy implements IAuthStrategy<PasswordLoginBody> {
     public LoginVo login(PasswordLoginBody loginBody, SysClientVo client) {
         String username = loginBody.getUsername();
         String password = loginBody.getPassword();
-        String code = loginBody.getCode();
-        String uuid = loginBody.getUuid();
+        String ticket = loginBody.getTicket();
         String clientId = client.getClientId();
 
-        boolean captchaEnabled = captchaProperties.getEnable();
-        // 验证码开关
-        if (captchaEnabled) {
-            validateCaptcha(TenantConstants.DEFAULT_TENANT_ID, null, username, code, uuid);
-        }
+        // 行为验证码：验证通过后下发一次性票据，这里校验并消费（验证码关闭时内部直接放行）
+        captchaVerifier.verify(TenantConstants.DEFAULT_TENANT_ID, null, username, ticket, loginService::recordLogininfor);
 
         SysUserVo user = loadUserByUsername(username);
         String tenantId = user.getTenantId();
@@ -91,26 +80,8 @@ public class PasswordAuthStrategy implements IAuthStrategy<PasswordLoginBody> {
     }
 
     /**
-     * 校验验证码
-     *
-     * @param username 用户名
-     * @param code     验证码
-     * @param uuid     唯一标识
+     * 根据用户名查询用户
      */
-    private void validateCaptcha(String tenantId, Long userId, String username, String code, String uuid) {
-        String verifyKey = GlobalConstants.CAPTCHA_CODE_KEY + StringUtils.blankToDefault(uuid, "");
-        String captcha = RedisUtils.getObject(verifyKey);
-        RedisUtils.deleteObject(verifyKey);
-        if (captcha == null) {
-            loginService.recordLogininfor(tenantId, userId, username, Constants.LOGIN_FAIL, MessageUtils.message("user.jcaptcha.expire"));
-            throw new CaptchaExpireException();
-        }
-        if (!StringUtils.equalsIgnoreCase(code, captcha)) {
-            loginService.recordLogininfor(tenantId, userId, username, Constants.LOGIN_FAIL, MessageUtils.message("user.jcaptcha.error"));
-            throw new CaptchaException();
-        }
-    }
-
     private SysUserVo loadUserByUsername(String username) {
         SysUserVo user = userMapper.selectVoOne(new LambdaQueryWrapper<SysUser>().eq(SysUser::getUserName, username));
         if (ObjectUtil.isNull(user)) {

@@ -32,11 +32,9 @@ export const useUserStore = defineStore('user', {
     },
     login(userInfo: LoginParam) {
       const username = userInfo.username.trim();
-      const { password } = userInfo;
-      const { code } = userInfo;
-      const { uuid } = userInfo;
+      const { password, ticket } = userInfo;
       return new Promise<void>((resolve, reject) => {
-        login({ username, password, code, uuid })
+        login({ username, password, ticket })
           .then((res) => {
             this.token = res.data.access_token;
             this.$persist();

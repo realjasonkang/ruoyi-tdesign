@@ -1,0 +1,234 @@
+// 验证码请求适配器：默认走 fetch，宿主可传入自己的 request 函数
+
+import { getDeviceFingerprint } from './device';
+
+export interface RequestOptions {
+  method?: 'GET' | 'POST';
+  query?: Record<string, unknown>;
+  json?: unknown;
+  /** 自定义请求头（如 Accept-Language） */
+  headers?: Record<string, string>;
+}
+
+/** 宿主可替换的请求函数，兼容 fetch 风格 */
+export type RequestFunction = (url: string, options?: RequestOptions) => Promise<any>;
+
+/** 坐标点（滑块/点选/曲线调试答案共用） */
+export interface ChallengePoint {
+  x: number;
+  y: number;
+}
+
+/** 滑块拼图类型特定化载荷 */
+export interface SliderChallengeData {
+  /** 拼图块内部左侧留白 */
+  pieceOffsetX?: number;
+  /** 调试：滑块答案 x */
+  debugX?: number;
+  /** 调试：假目标坐标 */
+  debugFakeTargets?: ChallengePoint[];
+}
+
+/** 文字点选类型特定化载荷 */
+export interface ClickChallengeData {
+  /** 提示词整图（透明背景，data URI） */
+  promptImage?: string;
+  /** 需要点击的目标数量 */
+  targetCount?: number;
+  /** 调试：目标坐标 */
+  debugTargets?: ChallengePoint[];
+  /** 调试：假目标坐标 */
+  debugFakeTargets?: ChallengePoint[];
+}
+
+/** 图片旋转类型特定化载荷 */
+export interface RotateChallengeData {
+  /** 调试：正确答案角度（度） */
+  debugAngle?: number;
+}
+
+/** 角度验证（圆盘旋转）类型特定化载荷 */
+export interface AngleChallengeData {
+  /** 圆形图直径（像素），前端按此尺寸居中渲染 */
+  discSize?: number;
+  /** 调试：正确答案角度（度，0~360） */
+  debugAngle?: number;
+}
+
+/** 刮刮乐调试图案信息 */
+export interface ScratchDebugPattern {
+  /** 图形名称（与后端内置图形名称一致） */
+  shape: string;
+  /** 归一化中心横坐标（0~1） */
+  x: number;
+  /** 归一化中心纵坐标（0~1） */
+  y: number;
+}
+
+/** 刮刮乐类型特定化载荷 */
+export interface ScratchChallengeData {
+  /** 提示词整图（透明背景，data URI） */
+  promptImage?: string;
+  /** 需要刮出的图形总数 */
+  targetCount?: number;
+  /** 调试：全部提示图形刚好出现的滑块位置（归一化 0~1） */
+  debugX?: number;
+  /** 调试：目标图案在 debugPatterns 中的下标 */
+  debugTargets?: number[];
+  /** 调试：全部图案（形状 + 归一化中心坐标） */
+  debugPatterns?: ScratchDebugPattern[];
+}
+
+/** 曲线绘制类型特定化载荷 */
+export interface CurveChallengeData {
+  /** 调试：期望曲线采样点（像素坐标） */
+  debugCurve?: ChallengePoint[];
+}
+
+/** 滑动曲线类型特定化载荷 */
+export interface SlideCurveChallengeData {
+  /** 曲线两端固定点（像素坐标） */
+  endpoints?: ChallengePoint[];
+  /** 曲线振幅（像素） */
+  amplitude?: number;
+  /** 归一化形状采样（首尾为 0，其余在 [-1, 1]） */
+  shape?: number[];
+  /** 调试：真凹槽对应的摆动答案（0~1） */
+  debugSwing?: number;
+  /** 调试：假凹槽左端坐标（像素） */
+  debugFakeTargets?: ChallengePoint[];
+}
+
+/** 滑块摆动图块类型特定化载荷 */
+export interface SwingTileChallengeData {
+  /** 贝塞尔路径点（起点 + 控制点 + 终点，像素坐标） */
+  path?: ChallengePoint[];
+  /** 起始方向（度） */
+  startRotation?: number;
+  /** 终点方向（度，与目标凹槽一致） */
+  endRotation?: number;
+  /** 方向摆动幅度（度） */
+  swingAmplitude?: number;
+  /** 图块图片边长（像素，含裁剪留白；与凹槽形状大小一致） */
+  pieceSize?: number;
+  /** 调试：真凹槽在路径上的位置（0~1） */
+  debugT?: number;
+  /** 调试：假凹槽中心坐标 */
+  debugFakeTargets?: ChallengePoint[];
+}
+
+/**
+ * 验证码下发载荷：类型特定化属性统一放在泛型 {@code data} 中，
+ * 新增验证码类型时只需定义自己的 data 接口，无需扩展本接口。
+ */
+export interface CaptchaChallenge<T = Record<string, unknown>> {
+  id: string;
+  type: string;
+  image1: string;
+  image2?: string;
+  width: number;
+  height: number;
+  /** 类型特定化数据：由各验证码类型的 data 接口定义 */
+  data?: T;
+  metadata?: Record<string, unknown>;
+}
+
+/** 校验结果 */
+export interface VerifyResult {
+  success: boolean;
+  done?: boolean;
+  message?: string;
+  code?: string;
+  ticket?: string;
+}
+
+/** 验证码 API 客户端 */
+export interface CaptchaApi {
+  getCaptcha: <T = Record<string, unknown>>(params?: Record<string, unknown>) => Promise<CaptchaChallenge<T>>;
+  verify: (payload: Record<string, unknown>) => Promise<VerifyResult>;
+}
+
+/**
+ * 自动携带设备指纹：请求方显式传了 deviceFingerprint 时优先保留，
+ * 否则用本地采集的指纹；采集失败时跳过该字段。
+ */
+async function attachDeviceFingerprint(payload?: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const merged = { ...(payload || {}) };
+  if (!merged.deviceFingerprint) {
+    merged.deviceFingerprint = await getDeviceFingerprint();
+  }
+  return merged;
+}
+
+/**
+ * 默认请求实现：GET 拼接 query，POST 发送 JSON。
+ */
+export async function defaultRequest(
+  url: string,
+  { method = 'GET', query, json, headers }: RequestOptions = {},
+): Promise<any> {
+  let target = url;
+  if (query) {
+    const qs = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined && value !== null && value !== '') {
+        qs.set(key, String(value));
+      }
+    }
+    const queryString = qs.toString();
+    if (queryString) {
+      target += (target.includes('?') ? '&' : '?') + queryString;
+    }
+  }
+  const response = await fetch(target, {
+    method,
+    headers: {
+      ...(json ? { 'Content-Type': 'application/json' } : {}),
+      ...headers,
+    },
+    body: json ? JSON.stringify(json) : undefined,
+  });
+  if (!response.ok) {
+    throw new Error(`验证码请求失败：${response.status}`);
+  }
+  return response.json();
+}
+
+/**
+ * 创建验证码 API 客户端。
+ */
+export function createCaptchaApi({
+  baseUrl = '/api/captcha',
+  request = defaultRequest,
+  locale,
+}: {
+  baseUrl?: string;
+  request?: RequestFunction | null;
+  /** 提示语言：随请求携带 lang，与后端多语言联动 */
+  locale?: string;
+} = {}): CaptchaApi {
+  // request 可能被上层配置显式传成 null，统一回退到默认实现
+  const requestFn = request || defaultRequest;
+  /** 后端消息语言：通过 Accept-Language 请求头传递 */
+  const acceptLanguage = locale ? (locale.toLowerCase().startsWith('en') ? 'en' : 'zh-CN') : undefined;
+  return {
+    /** 获取验证码 */
+    async getCaptcha<T = Record<string, unknown>>(params = {}): Promise<CaptchaChallenge<T>> {
+      const query = await attachDeviceFingerprint(params);
+      return requestFn(baseUrl, {
+        method: 'GET',
+        query,
+        headers: acceptLanguage ? { 'Accept-Language': acceptLanguage } : undefined,
+      });
+    },
+    /** 提交答案 */
+    async verify(payload) {
+      const json = await attachDeviceFingerprint(payload);
+      return requestFn(`${baseUrl}/verify`, {
+        method: 'POST',
+        json,
+        headers: acceptLanguage ? { 'Accept-Language': acceptLanguage } : undefined,
+      });
+    },
+  };
+}

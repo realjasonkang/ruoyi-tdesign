@@ -21,14 +21,29 @@ server:
       worker: 256
 
 captcha:
-  # 是否启用验证码校验
-  enable: true
-  # 验证码类型 math 数组计算 char 字符验证
-  type: math
-  # 数字验证码位数
-  numberLength: 1
-  # 字符验证码长度
-  charLength: 4
+  # 是否启用验证码：为 false 时不注册验证码接口，登录/注册也不校验票据（前端据此开关决定是否渲染验证码组件）
+  enabled: true
+  # 允许下发的验证码类型池：非 debug 时由服务端在该范围内随机下发并随结果返回 type，前端按响应渲染
+  # 不配置=全部已注册类型（slider/click/click-shape/rotate/angle/scratch/curve/slide-curve/swing-tile）
+  # 收窄示例（只想用滑块+点选）：
+  # types:
+  #   - slider
+  #   - click
+  # 行为验证码接口前缀
+  api-prefix: /api/captcha
+  # 是否下发调试答案（生产环境务必关闭）
+  debug-enabled: false
+  # 验证通过后一次性票据的有效期（秒）
+  ticket-expire-seconds: 120
+  # 验证码背景图（classpath 资源），素材缺失时用程序生成的图片兜底
+  background:
+    sources:
+      - /images/captcha/default.jpg
+    generate-fallback: true
+  # 滑块拼图：登录页按该尺寸渲染；未指定形状时从 enabled-shapes 随机挑选
+  slider:
+    width: 340
+    height: 160
 
 # 日志配置
 logging:
@@ -164,6 +179,9 @@ security:
     - /*/api-docs
     - /*/api-docs/**
     - /warm-flow-ui/config
+    # 行为验证码接口（登录前调用，无需登录）
+    - /api/captcha
+    - /api/captcha/**
 
 # 多租户配置
 tenant:

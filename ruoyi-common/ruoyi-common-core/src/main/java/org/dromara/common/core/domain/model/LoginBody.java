@@ -41,13 +41,8 @@ public class LoginBody implements Serializable {
     private String grantType;
 
     /**
-     * 验证码
+     * 验证码票据（行为验证码验证通过后由 {captcha.api-prefix}/verify 下发，一次性使用）
      */
-    private String code;
-
-    /**
-     * 唯一标识
-     */
-    private String uuid;
+    private String ticket;
 
 }

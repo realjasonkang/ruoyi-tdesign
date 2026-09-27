@@ -1,6 +1,6 @@
 package org.dromara.test;
 
-import org.dromara.common.web.config.properties.CaptchaProperties;
+import io.github.yixiaco.autoconfigure.CaptchaProperties;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;

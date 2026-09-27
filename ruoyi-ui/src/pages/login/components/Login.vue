@@ -35,20 +35,6 @@
         </t-input>
       </t-form-item>
 
-      <t-form-item v-if="captchaEnabled" class="verification-code" name="code">
-        <t-input v-model="formData.code" size="large" :placeholder="t('pages.login.input.verification')">
-          <template #label>
-            <secured-icon />
-          </template>
-        </t-input>
-        <div class="login-code">
-          <img :src="codeUrl" class="login-code-img" @click="getCode" />
-        </div>
-        <!--        <t-button variant="outline" :disabled="countDown > 0" @click="sendCode"> -->
-        <!--          {{ countDown === 0 ? t('pages.login.sendVerification') : `${countDown}秒后可重发` }} -->
-        <!--        </t-button> -->
-      </t-form-item>
-
       <div class="check-container remember-pwd">
         <t-checkbox v-model="formData.rememberMe">{{ t('pages.login.remember') }}</t-checkbox>
         <span class="tip">{{ t('pages.login.forget') }}</span>
@@ -120,8 +106,19 @@
       </t-button>
     </div>
   </t-form>
+
+  <!-- 行为验证码：点击登录后弹窗验证，通过后凭一次性票据继续登录 -->
+  <captcha
+    display="modal"
+    :visible="captchaVisible"
+    :base-url="captchaBaseUrl"
+    @success="onCaptchaSuccess"
+    @close="onCaptchaClose"
+  />
 </template>
 <script lang="ts" setup>
+import '@/components/CaptchaToolkit/style.css';
+
 import {
   BrowseIcon,
   BrowseOffIcon,
@@ -131,7 +128,6 @@ import {
   LogoWechatStrokeFilledIcon,
   MobileIcon,
   RefreshIcon,
-  SecuredIcon,
   UserIcon,
 } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, SubmitContext } from 'tdesign-vue-next';
@@ -145,18 +141,13 @@ import { authRouterUrl } from '@/api/system/social';
 import GiteeSvg from '@/assets/icons/svg/gitee.svg?component';
 import MaxKey from '@/assets/icons/svg/maxkey.svg?component';
 import TopIam from '@/assets/icons/svg/topiam.svg?url';
+import type { VerifyResult } from '@/components/CaptchaToolkit/api';
+import Captcha from '@/components/CaptchaToolkit/Captcha.vue';
 import { useCounter } from '@/hooks';
 import { t } from '@/locales';
 import { useTabsRouterStore, useUserStore } from '@/store';
 
 const userStore = useUserStore();
-
-const FORM_RULES = computed<Record<string, FormRule[]>>(() => ({
-  phone: [{ required: true, message: t('pages.login.required.phone'), type: 'error' }],
-  account: [{ required: true, message: t('pages.login.required.account'), type: 'error' }],
-  password: [{ required: true, message: t('pages.login.required.password'), type: 'error' }],
-  code: [{ required: true, message: t('pages.login.required.verification'), type: 'error' }],
-}));
 
 const type = ref('password');
 const form = ref<FormInstanceFunctions>();
@@ -165,14 +156,27 @@ const formData = ref({
   account: import.meta.env.VITE_APP_ACCOUNT || '',
   password: import.meta.env.VITE_APP_PASSWORD || '',
   rememberMe: false,
+  // 手机号登录的短信验证码
   code: '',
-  uuid: '',
+  ticket: '',
 });
 const showPsw = ref(false);
-const codeUrl = ref('');
 const loading = ref(false);
 // 验证码开关
 const captchaEnabled = ref(true);
+// 行为验证码弹窗开关（点击登录后弹出，验证通过再提交登录）
+const captchaVisible = ref(false);
+// 行为验证码接口前缀（跟随项目 api 前缀，开发环境由代理转发）
+const captchaBaseUrl = `${import.meta.env.VITE_APP_BASE_API}/api/captcha`;
+
+const FORM_RULES = computed<Record<string, FormRule[]>>(() => ({
+  phone: [{ required: true, message: t('pages.login.required.phone'), type: 'error' }],
+  account: [{ required: true, message: t('pages.login.required.account'), type: 'error' }],
+  password: [{ required: true, message: t('pages.login.required.password'), type: 'error' }],
+  // 短信验证码仅在手机号登录时校验
+  code:
+    type.value === 'phone' ? [{ required: true, message: t('pages.login.required.verification'), type: 'error' }] : [],
+}));
 
 const [countDown, handleCounter] = useCounter();
 
@@ -185,16 +189,21 @@ const route = useRoute();
 const router = useRouter();
 const { proxy } = getCurrentInstance();
 
-function getCode() {
-  getCodeImg().then((res) => {
+/**
+ * 拉取本次验证码开关与类型（后端 captcha.mode 可配成 random，每次随机一种类型）
+ *
+ * @return 本次登录是否需要验证码
+ */
+async function prepareCaptcha(): Promise<boolean> {
+  try {
+    const res = await getCodeImg();
     captchaEnabled.value = res.data.captchaEnabled === undefined ? true : res.data.captchaEnabled;
-    if (captchaEnabled.value) {
-      // 刷新验证码时清空输入框
-      formData.value.code = '';
-      codeUrl.value = `data:image/gif;base64,${res.data.img}`;
-      formData.value.uuid = res.data.uuid;
-    }
-  });
+  } catch {
+    // 拉取失败时沿用上一次的开关与类型，避免网络抖动直接跳过验证
+  }
+  // 票据是一次性的，每次验证前清空
+  formData.value.ticket = '';
+  return captchaEnabled.value;
 }
 
 function getLoginData() {
@@ -207,7 +216,7 @@ function getLoginData() {
     password: password || formData.value.password,
     rememberMe: rememberMe ? Boolean(rememberMe) : formData.value.rememberMe,
     code: '',
-    uuid: '',
+    ticket: '',
   };
 }
 
@@ -222,60 +231,91 @@ const sendCode = () => {
   });
 };
 
-const onSubmit = async (ctx: SubmitContext) => {
-  if (ctx.validateResult === true) {
+/**
+ * 提交登录
+ */
+async function doLogin() {
+  try {
+    loading.value = true;
+    let username;
+    switch (type.value) {
+      case 'password':
+        username = formData.value.account;
+        break;
+      case 'phone':
+        username = formData.value.phone;
+        break;
+      default:
+    }
+    const loginParam: LoginParam = {
+      username,
+      password: formData.value.password,
+      ticket: formData.value.ticket,
+    };
+    const msgLoading = proxy.$modal.msgLoading('登录中...');
     try {
-      loading.value = true;
-      let username;
-      switch (type.value) {
-        case 'password':
-          username = formData.value.account;
-          break;
-        case 'phone':
-          username = formData.value.phone;
-          break;
-        default:
-      }
-      const loginParam: LoginParam = {
-        username,
-        password: formData.value.password,
-        code: formData.value.code,
-        uuid: formData.value.uuid,
-      };
-      const msgLoading = proxy.$modal.msgLoading('登录中...');
-      try {
-        await userStore.login(loginParam);
-      } finally {
-        proxy.$modal.msgClose(msgLoading);
-      }
-      // 勾选了需要记住密码设置在 localStorage 中设置记住用户名和密码
-      if (formData.value.rememberMe && type.value === 'password') {
-        localStorage.setItem('account', String(formData.value.account));
-        localStorage.setItem('password', String(formData.value.password));
-        localStorage.setItem('rememberMe', String(formData.value.rememberMe));
-      } else {
-        // 否则移除
-        localStorage.removeItem('account');
-        localStorage.removeItem('password');
-        localStorage.removeItem('rememberMe');
-      }
-
-      await MessagePlugin.success(t('pages.login.loginSuccess'));
-      // 登录时删除保留的菜单项
-      tabsRouterStore.removeTabRouterList();
-      // 重定向到保留的菜单
-      const redirect = route.query.redirect as string;
-      const redirectUrl = redirect ? decodeURIComponent(redirect) : '/';
-      await router.push(redirectUrl);
-    } catch {
-      // 重新获取验证码
-      if (captchaEnabled.value) {
-        getCode();
-      }
+      await userStore.login(loginParam);
     } finally {
-      loading.value = false;
+      proxy.$modal.msgClose(msgLoading);
+    }
+    // 勾选了需要记住密码设置在 localStorage 中设置记住用户名和密码
+    if (formData.value.rememberMe && type.value === 'password') {
+      localStorage.setItem('account', String(formData.value.account));
+      localStorage.setItem('password', String(formData.value.password));
+      localStorage.setItem('rememberMe', String(formData.value.rememberMe));
+    } else {
+      // 否则移除
+      localStorage.removeItem('account');
+      localStorage.removeItem('password');
+      localStorage.removeItem('rememberMe');
+    }
+
+    await MessagePlugin.success(t('pages.login.loginSuccess'));
+    // 登录时删除保留的菜单项
+    tabsRouterStore.removeTabRouterList();
+    // 重定向到保留的菜单
+    const redirect = route.query.redirect as string;
+    const redirectUrl = redirect ? decodeURIComponent(redirect) : '/';
+    await router.push(redirectUrl);
+  } catch {
+    // 票据一次性使用，登录失败后需要重新验证
+    formData.value.ticket = '';
+  } finally {
+    loading.value = false;
+  }
+}
+
+/**
+ * 行为验证码弹窗验证通过：保存一次性票据并继续登录
+ */
+function onCaptchaSuccess(result: VerifyResult) {
+  formData.value.ticket = result?.ticket || '';
+  captchaVisible.value = false;
+  if (formData.value.ticket) {
+    doLogin();
+  }
+}
+
+/**
+ * 行为验证码弹窗关闭（用户未验证或主动取消）
+ */
+function onCaptchaClose() {
+  captchaVisible.value = false;
+}
+
+const onSubmit = async (ctx: SubmitContext) => {
+  if (ctx.validateResult !== true) {
+    return;
+  }
+  // 账号密码先本地校验，再弹窗完成验证码，验证通过后才提交登录
+  if (type.value === 'password' && !formData.value.ticket) {
+    // 先取本次的开关与类型，再按该类型渲染验证码弹窗
+    if (await prepareCaptcha()) {
+      captchaVisible.value = true;
+      return;
     }
   }
+  await doLogin();
 };
 
 /**
@@ -289,7 +329,6 @@ function doSocialLogin(type: string) {
   });
 }
 
-getCode();
 getLoginData();
 </script>
 <style lang="less" scoped>
